@@ -15,7 +15,9 @@ limitations under the License.
 */
 package main
 
-import "github.com/jack5341/fuzzy-pancake/cmd"
+import (
+	"github.com/jack5341/fuzzy-pancake/cmd"
+)
 
 func main() {
 	cmd.Execute()

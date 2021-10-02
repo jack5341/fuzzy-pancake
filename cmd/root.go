@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	ui "github.com/gizak/termui/v3"
@@ -31,6 +32,11 @@ type Stats struct {
 	Following       int         `json:"following"`
 	CreatedAt       time.Time   `json:"created_at"`
 	UpdatedAt       time.Time   `json:"updated_at"`
+}
+
+type Repos struct {
+	Name string `json:"name"`
+	Fork bool   `json:"fork"`
 }
 
 // rootCmd represents the base command when called without any subcommands
@@ -65,7 +71,10 @@ func fetch(name string) error {
 		return errors.New("username is required")
 	}
 
-	resp, err := http.Get("https://api.github.com/users/" + name)
+	req, _ := http.NewRequest("GET", "https://api.github.com/users/"+name, nil)
+	req.Header.Add("Authorization", "token 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")
+	resp, err := http.DefaultClient.Do(req)
+
 	if err != nil {
 		return errors.New("error in fetching github user")
 	}
@@ -78,19 +87,58 @@ func fetch(name string) error {
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
 	}
+
 	defer ui.Close()
 
 	// Text Paragraph
-	textBox := fmt.Sprintf(` Username: %v
-	 Full Name: %v`, stats.Login, stats.Name)
+	textBox := fmt.Sprintf(`Username: %v
+	Full Name: %v
+	Email: %v
+	Bio: %v
+	Twitter: %v
+	Company: %v
+	Followers: %v
+	Following: %v
+	Created At: %v`, stats.Login, stats.Name, stats.Email, stats.Bio, string(stats.TwitterUsername), stats.Company, stats.Followers, stats.Following, stats.CreatedAt)
 
-	username := widgets.NewParagraph()
-	username.Title = " Github User "
-	username.Text = textBox
-	username.SetRect(0, 0, 50, 4)
-	username.BorderStyle.Fg = ui.ColorBlue
+	user := widgets.NewParagraph()
+	user.Title = " User "
+	user.Text = textBox
+	user.SetRect(0, 0, 40, 15)
+	user.BorderStyle.Fg = ui.ColorBlue
 
-	ui.Render(username)
+	token := os.Getenv("GITHUB_ACCESS_TOKEN")
+
+	if token == "" {
+		return errors.New("occured an error while taking access token")
+	}
+
+	req, _ = http.NewRequest("GET", "https://api.github.com/users/"+name+"/repos", nil)
+	req.Header.Add("Authorization", "token"+token)
+	resp, err = http.DefaultClient.Do(req)
+
+	if err != nil {
+		return errors.New("error in fetching github repositories")
+	}
+
+	var repos []Repos
+	var rows []string
+	json.NewDecoder(resp.Body).Decode(&repos)
+
+	for _, repo := range repos {
+		if !repo.Fork {
+			rows = append(rows, repo.Name)
+		}
+	}
+
+	// List
+	info := widgets.NewList()
+	info.Title = " Repositories "
+	info.Rows = rows
+	info.SetRect(40, 0, 80, 25)
+	info.BorderStyle.Fg = ui.ColorBlue
+
+	ui.Render(user, info)
 
 	for e := range ui.PollEvents() {
 		if e.Type == ui.KeyboardEvent {
